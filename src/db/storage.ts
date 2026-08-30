@@ -1,9 +1,193 @@
-import { CompanyProfile, Customer, Item, Invoice, Payment, CreditNote, BackupData } from '../types';
+import { 
+  CompanyProfile, 
+  Customer, 
+  Item, 
+  Invoice, 
+  Payment, 
+  CreditNote, 
+  BackupData, 
+  AppUser, 
+  UserRole, 
+  UserPermissions,
+  SyncLog,
+  ActivityLog 
+} from '../types';
 import { getFinancialYear, calculateLineItem, numberToWordsIndian, calculateInvoiceProfit } from '../utils/gstEngine';
 
 const DB_NAME = 'GST_INVOICE_PRO_DB';
-const DB_VERSION = 1;
-const LOCAL_STORAGE_KEY = 'GST_APP_LOCAL_STORAGE_V1';
+const DB_VERSION = 2;
+const LOCAL_STORAGE_KEY = 'GST_APP_LOCAL_STORAGE_V2';
+const ACTIVE_USER_SESSION_KEY = 'GST_ACTIVE_USER_SESSION_V2';
+
+export function getRoleDefaultPermissions(role: UserRole): UserPermissions {
+  switch (role) {
+    case 'ADMIN':
+      return {
+        canCreateInvoice: true,
+        canCreateEstimate: true,
+        canEditInvoice: true,
+        canDeleteInvoice: true,
+        canCancelInvoice: true,
+        canViewProfit: true,
+        canManageItems: true,
+        canManageCustomers: true,
+        canRecordPayment: true,
+        canCreateCreditNote: true,
+        canViewReports: true,
+        canSyncUSB: true,
+        canBackupRestore: true,
+        canManageCompanySettings: true,
+        canManageUsers: true,
+        allowDiscountEditing: true,
+        maxDiscountPercent: 100,
+        salesCommissionPercent: 0,
+      };
+    case 'SALESMAN':
+      return {
+        canCreateInvoice: true,
+        canCreateEstimate: true,
+        canEditInvoice: false,
+        canDeleteInvoice: false,
+        canCancelInvoice: false,
+        canViewProfit: false,
+        canManageItems: false,
+        canManageCustomers: true,
+        canRecordPayment: true,
+        canCreateCreditNote: false,
+        canViewReports: false,
+        canSyncUSB: true,
+        canBackupRestore: false,
+        canManageCompanySettings: false,
+        canManageUsers: false,
+        allowDiscountEditing: true,
+        maxDiscountPercent: 10,
+        salesCommissionPercent: 3.5,
+      };
+    case 'STAFF':
+      return {
+        canCreateInvoice: true,
+        canCreateEstimate: true,
+        canEditInvoice: true,
+        canDeleteInvoice: false,
+        canCancelInvoice: true,
+        canViewProfit: false,
+        canManageItems: true,
+        canManageCustomers: true,
+        canRecordPayment: true,
+        canCreateCreditNote: true,
+        canViewReports: false,
+        canSyncUSB: true,
+        canBackupRestore: false,
+        canManageCompanySettings: false,
+        canManageUsers: false,
+        allowDiscountEditing: true,
+        maxDiscountPercent: 15,
+        salesCommissionPercent: 0,
+      };
+    case 'ACCOUNTANT':
+      return {
+        canCreateInvoice: true,
+        canCreateEstimate: true,
+        canEditInvoice: true,
+        canDeleteInvoice: false,
+        canCancelInvoice: true,
+        canViewProfit: true,
+        canManageItems: true,
+        canManageCustomers: true,
+        canRecordPayment: true,
+        canCreateCreditNote: true,
+        canViewReports: true,
+        canSyncUSB: true,
+        canBackupRestore: true,
+        canManageCompanySettings: false,
+        canManageUsers: false,
+        allowDiscountEditing: true,
+        maxDiscountPercent: 20,
+        salesCommissionPercent: 0,
+      };
+    default:
+      return {
+        canCreateInvoice: true,
+        canCreateEstimate: false,
+        canEditInvoice: false,
+        canDeleteInvoice: false,
+        canCancelInvoice: false,
+        canViewProfit: false,
+        canManageItems: false,
+        canManageCustomers: false,
+        canRecordPayment: false,
+        canCreateCreditNote: false,
+        canViewReports: false,
+        canSyncUSB: false,
+        canBackupRestore: false,
+        canManageCompanySettings: false,
+        canManageUsers: false,
+        allowDiscountEditing: false,
+        maxDiscountPercent: 0,
+        salesCommissionPercent: 0,
+      };
+  }
+}
+
+export const DEFAULT_USERS: AppUser[] = [
+  {
+    id: 'usr-admin',
+    username: 'admin',
+    name: 'Administrator',
+    passwordHash: 'admin123',
+    role: 'ADMIN',
+    phone: '+91 98765 43210',
+    email: 'admin@apextechsolutions.in',
+    isActive: true,
+    permissions: getRoleDefaultPermissions('ADMIN'),
+    lastLoginAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'usr-sales-1',
+    username: 'sales1',
+    name: 'Rahul Verma (Salesman)',
+    passwordHash: 'sales123',
+    role: 'SALESMAN',
+    phone: '+91 98111 22334',
+    email: 'rahul.sales@apextechsolutions.in',
+    isActive: true,
+    permissions: getRoleDefaultPermissions('SALESMAN'),
+    lastLoginAt: new Date(Date.now() - 3600000).toISOString(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'usr-staff-1',
+    username: 'staff1',
+    name: 'Pooja Sharma (Billing Staff)',
+    passwordHash: 'staff123',
+    role: 'STAFF',
+    phone: '+91 98222 33445',
+    email: 'pooja.billing@apextechsolutions.in',
+    isActive: true,
+    permissions: getRoleDefaultPermissions('STAFF'),
+    lastLoginAt: new Date(Date.now() - 7200000).toISOString(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'usr-accountant-1',
+    username: 'accountant',
+    name: 'Vikram Patel (Senior Accountant)',
+    passwordHash: 'account123',
+    role: 'ACCOUNTANT',
+    phone: '+91 98333 44556',
+    email: 'vikram.accounts@apextechsolutions.in',
+    isActive: true,
+    permissions: getRoleDefaultPermissions('ACCOUNTANT'),
+    lastLoginAt: new Date(Date.now() - 14400000).toISOString(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+
 
 export const DEFAULT_COMPANY: CompanyProfile = {
   id: 'default-company',
@@ -613,15 +797,53 @@ export function getSampleCreditNotes(): CreditNote[] {
   return [];
 }
 
+export const INITIAL_ACTIVITY_LOGS: ActivityLog[] = [
+  {
+    id: 'act-1',
+    timestamp: new Date(Date.now() - 1800000).toISOString(),
+    userId: 'usr-admin',
+    userName: 'Administrator',
+    action: 'System Initialized',
+    details: 'GST Invoice Pro offline database loaded with 4 configured user accounts.',
+    type: 'ADMIN',
+  },
+  {
+    id: 'act-2',
+    timestamp: new Date(Date.now() - 900000).toISOString(),
+    userId: 'usr-sales-1',
+    userName: 'Rahul Verma (Salesman)',
+    action: 'Logged in to Mobile App',
+    details: 'Sales counter session started.',
+    type: 'AUTH',
+  }
+];
+
+export const INITIAL_SYNC_LOGS: SyncLog[] = [];
+
 /**
  * Storage Controller Layer
  */
 export class OfflineStorage {
   private static getInitialState(): BackupData {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+    // Try V2 first, fallback to V1 migration
+    let saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!saved) {
+      saved = localStorage.getItem('GST_APP_LOCAL_STORAGE_V1');
+    }
+
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
+        // Ensure users array exists
+        if (!parsed.users || parsed.users.length === 0) {
+          parsed.users = DEFAULT_USERS;
+        }
+        if (!parsed.activityLogs) {
+          parsed.activityLogs = INITIAL_ACTIVITY_LOGS;
+        }
+        if (!parsed.syncLogs) {
+          parsed.syncLogs = INITIAL_SYNC_LOGS;
+        }
         return parsed;
       } catch (e) {
         console.error('Error parsing local storage backup', e);
@@ -630,7 +852,7 @@ export class OfflineStorage {
 
     const company = DEFAULT_COMPANY;
     return {
-      version: '1.0.0',
+      version: '2.0.0',
       exportedAt: new Date().toISOString(),
       company,
       customers: INITIAL_CUSTOMERS,
@@ -638,6 +860,9 @@ export class OfflineStorage {
       invoices: getSampleInvoices(company),
       payments: getSamplePayments(),
       creditNotes: getSampleCreditNotes(),
+      users: DEFAULT_USERS,
+      syncLogs: INITIAL_SYNC_LOGS,
+      activityLogs: INITIAL_ACTIVITY_LOGS,
     };
   }
 
@@ -655,13 +880,25 @@ export class OfflineStorage {
     }
   }
 
+  public static getActiveUserSession(): string | null {
+    return localStorage.getItem(ACTIVE_USER_SESSION_KEY);
+  }
+
+  public static setActiveUserSession(userId: string | null): void {
+    if (userId) {
+      localStorage.setItem(ACTIVE_USER_SESSION_KEY, userId);
+    } else {
+      localStorage.removeItem(ACTIVE_USER_SESSION_KEY);
+    }
+  }
+
   public static exportJSON(data: BackupData): string {
     return JSON.stringify(data, null, 2);
   }
 
   public static resetToFactoryDefaults(): BackupData {
     const defaultData: BackupData = {
-      version: '1.0.0',
+      version: '2.0.0',
       exportedAt: new Date().toISOString(),
       company: DEFAULT_COMPANY,
       customers: INITIAL_CUSTOMERS,
@@ -669,6 +906,9 @@ export class OfflineStorage {
       invoices: getSampleInvoices(DEFAULT_COMPANY),
       payments: getSamplePayments(),
       creditNotes: [],
+      users: DEFAULT_USERS,
+      syncLogs: [],
+      activityLogs: INITIAL_ACTIVITY_LOGS,
     };
     this.saveData(defaultData);
     return defaultData;

@@ -9,10 +9,17 @@ import {
   BackupData,
   CustomerLedgerEntry,
   AgeingBucket,
-  RateWiseGSTSummary
+  RateWiseGSTSummary,
+  AppUser,
+  UserRole,
+  UserPermissions,
+  SyncLog,
+  ActivityLog,
+  SyncPackage
 } from '../types';
-import { OfflineStorage, DEFAULT_COMPANY } from '../db/storage';
+import { OfflineStorage, DEFAULT_COMPANY, DEFAULT_USERS, getRoleDefaultPermissions } from '../db/storage';
 import { formatInvoiceNumber, getFinancialYear, calculateInvoiceProfit, numberToWordsIndian } from '../utils/gstEngine';
+import { createSyncPackage, mergeSyncPackage, SyncDiffResult } from '../utils/syncEngine';
 
 export type AppView = 
   | 'dashboard'
@@ -24,7 +31,12 @@ export type AppView =
   | 'credit-notes'
   | 'reports'
   | 'settings'
-  | 'backup';
+  | 'backup'
+  | 'admin-users'
+  | 'salesman-portal'
+  | 'staff-portal'
+  | 'accountant-portal'
+  | 'usb-sync';
 
 export interface ToastMessage {
   id: string;
@@ -38,10 +50,27 @@ interface AppContextType {
   currentView: AppView;
   setCurrentView: (view: AppView) => void;
   
-  // Security / Lock
+  // Security / Lock / Auth
+  currentUser: AppUser | null;
+  users: AppUser[];
+  login: (username: string, password: string) => { success: boolean; error?: string };
+  logout: () => void;
+  switchUser: (userId: string) => void;
+  saveUser: (user: AppUser) => void;
+  deleteUser: (userId: string) => boolean;
+  updateUserPermissions: (userId: string, permissions: Partial<UserPermissions>) => void;
+  hasPermission: (permissionKey: keyof UserPermissions) => boolean;
   isLocked: boolean;
   lockApp: () => void;
   unlockApp: (password: string) => boolean;
+  
+  // Audit & Sync
+  syncLogs: SyncLog[];
+  activityLogs: ActivityLog[];
+  addActivityLog: (action: string, details: string, type?: ActivityLog['type']) => void;
+  exportUSBSyncPackage: (deviceName?: string) => { filename: string; jsonString: string; packageData: SyncPackage };
+  importUSBSyncPackage: (incomingJson: string) => { success: boolean; diff?: SyncDiffResult; error?: string };
+  applyUSBSyncMerge: (diff: SyncDiffResult) => void;
   
   // Data entities
   company: CompanyProfile;
@@ -107,8 +136,20 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [data, setData] = useState<BackupData>(() => OfflineStorage.loadData());
   const [currentView, setCurrentView] = useState<AppView>('invoices');
-  const [isLocked, setIsLocked] = useState<boolean>(() => Boolean(data.company.isPasswordProtected && data.company.passwordHash));
+  const [isLocked, setIsLocked] = useState<boolean>(false);
   
+  // User Authentication State
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
+    const savedUserId = OfflineStorage.getActiveUserSession();
+    const users = data.users || DEFAULT_USERS;
+    if (savedUserId) {
+      const found = users.find(u => u.id === savedUserId && u.isActive);
+      if (found) return found;
+    }
+    // Return null so everyone sees the login page first
+    return null;
+  });
+
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -135,6 +176,239 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
+  const addActivityLog = useCallback((action: string, details: string, type: ActivityLog['type'] = 'ADMIN') => {
+    const newLog: ActivityLog = {
+      id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: new Date().toISOString(),
+      userId: currentUser?.id || 'usr-system',
+      userName: currentUser?.name || 'System',
+      action,
+      details,
+      type,
+    };
+    setData(prev => ({
+      ...prev,
+      activityLogs: [newLog, ...(prev.activityLogs || []).slice(0, 199)],
+    }));
+  }, [currentUser]);
+
+  // Auth: Login
+  const login = useCallback((username: string, password: string): { success: boolean; error?: string } => {
+    const users = data.users || DEFAULT_USERS;
+    const user = users.find(u => u.username.trim().toLowerCase() === username.trim().toLowerCase());
+    
+    if (!user) {
+      return { success: false, error: 'Invalid User ID. Please check and try again.' };
+    }
+    if (!user.isActive) {
+      return { success: false, error: 'This user account is deactivated. Contact Administrator.' };
+    }
+    if (user.passwordHash !== password.trim()) {
+      return { success: false, error: 'Incorrect Password. Please try again.' };
+    }
+
+    const updatedUser: AppUser = {
+      ...user,
+      lastLoginAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Update last login in data
+    setData(prev => ({
+      ...prev,
+      users: (prev.users || DEFAULT_USERS).map(u => (u.id === updatedUser.id ? updatedUser : u)),
+    }));
+
+    setCurrentUser(updatedUser);
+    OfflineStorage.setActiveUserSession(updatedUser.id);
+    setIsLocked(false);
+
+    // Smart default view routing based on role
+    if (updatedUser.role === 'SALESMAN') {
+      setCurrentView('salesman-portal');
+    } else if (updatedUser.role === 'ADMIN') {
+      setCurrentView('dashboard');
+    } else if (updatedUser.role === 'ACCOUNTANT') {
+      setCurrentView('reports');
+    } else {
+      setCurrentView('invoices');
+    }
+
+    addActivityLog('User Logged In', `${updatedUser.name} (${updatedUser.role}) logged in successfully.`, 'AUTH');
+    showToast('success', `Welcome, ${updatedUser.name}`, `Signed in as ${updatedUser.role}`);
+    return { success: true };
+  }, [data.users, addActivityLog, showToast]);
+
+  // Auth: Logout
+  const logout = useCallback(() => {
+    if (currentUser) {
+      addActivityLog('User Logged Out', `${currentUser.name} signed out.`, 'AUTH');
+    }
+    setCurrentUser(null);
+    OfflineStorage.setActiveUserSession(null);
+    setCurrentView('invoices');
+    showToast('info', 'Logged Out', 'You have been safely signed out.');
+  }, [currentUser, addActivityLog, showToast]);
+
+  const switchUser = useCallback((userId: string) => {
+    const users = data.users || DEFAULT_USERS;
+    const target = users.find(u => u.id === userId);
+    if (target && target.isActive) {
+      setCurrentUser(target);
+      OfflineStorage.setActiveUserSession(target.id);
+      if (target.role === 'SALESMAN') setCurrentView('salesman-portal');
+      else if (target.role === 'ADMIN') setCurrentView('dashboard');
+      else if (target.role === 'ACCOUNTANT') setCurrentView('reports');
+      else setCurrentView('invoices');
+      showToast('info', 'Switched User', `Active session: ${target.name} (${target.role})`);
+    }
+  }, [data.users, showToast]);
+
+  // User & Permission Management (Admin)
+  const saveUser = useCallback((user: AppUser) => {
+    setData(prev => {
+      const currentUsers = prev.users || DEFAULT_USERS;
+      const exists = currentUsers.some(u => u.id === user.id);
+      let updatedUsers: AppUser[];
+      if (exists) {
+        updatedUsers = currentUsers.map(u => (u.id === user.id ? user : u));
+      } else {
+        updatedUsers = [...currentUsers, user];
+      }
+      return { ...prev, users: updatedUsers };
+    });
+
+    if (currentUser && currentUser.id === user.id) {
+      setCurrentUser(user);
+    }
+
+    addActivityLog('Saved User Account', `User ${user.name} (@${user.username}) updated with role ${user.role}.`, 'ADMIN');
+    showToast('success', 'User Account Saved', `${user.name} permissions and credentials updated.`);
+  }, [currentUser, addActivityLog, showToast]);
+
+  const deleteUser = useCallback((userId: string): boolean => {
+    const currentUsers = data.users || DEFAULT_USERS;
+    const target = currentUsers.find(u => u.id === userId);
+    if (!target) return false;
+    if (target.username === 'admin') {
+      showToast('error', 'Cannot Delete Admin', 'The primary Administrator account cannot be deleted.');
+      return false;
+    }
+
+    setData(prev => ({
+      ...prev,
+      users: (prev.users || DEFAULT_USERS).filter(u => u.id !== userId),
+    }));
+
+    addActivityLog('Deleted User Account', `Removed user ${target.name} (@${target.username}).`, 'ADMIN');
+    showToast('info', 'User Removed', `${target.name} has been deleted.`);
+    return true;
+  }, [data.users, addActivityLog, showToast]);
+
+  const updateUserPermissions = useCallback((userId: string, permissions: Partial<UserPermissions>) => {
+    setData(prev => {
+      const currentUsers = prev.users || DEFAULT_USERS;
+      const updated = currentUsers.map(u => {
+        if (u.id === userId) {
+          return {
+            ...u,
+            permissions: { ...u.permissions, ...permissions },
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        return u;
+      });
+      return { ...prev, users: updated };
+    });
+
+    if (currentUser && currentUser.id === userId) {
+      setCurrentUser(prev => prev ? { ...prev, permissions: { ...prev.permissions, ...permissions } } : null);
+    }
+
+    addActivityLog('Updated Permissions', `Custom permissions applied for user ID ${userId}.`, 'ADMIN');
+    showToast('success', 'Permissions Updated', 'User access rules applied.');
+  }, [currentUser, addActivityLog, showToast]);
+
+  const hasPermission = useCallback((permissionKey: keyof UserPermissions): boolean => {
+    if (!currentUser) return false;
+    if (currentUser.role === 'ADMIN') return true;
+    return Boolean(currentUser.permissions?.[permissionKey]);
+  }, [currentUser]);
+
+  // USB Sync Engine Integration
+  const exportUSBSyncPackage = useCallback((deviceName?: string) => {
+    if (!currentUser) throw new Error('Must be logged in to sync');
+    const syncResult = createSyncPackage(data, currentUser, deviceName);
+    
+    // Record sync log
+    const log: SyncLog = {
+      id: `synclog-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      direction: 'EXPORT',
+      sourceDevice: syncResult.packageData.deviceName,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      invoicesCount: data.invoices.length,
+      paymentsCount: data.payments.length,
+      customersCount: data.customers.length,
+      itemsCount: data.items.length,
+      status: 'SUCCESS',
+      details: `Generated USB sync bundle (${syncResult.filename})`,
+    };
+
+    setData(prev => ({
+      ...prev,
+      syncLogs: [log, ...(prev.syncLogs || []).slice(0, 49)],
+    }));
+
+    addActivityLog('USB Sync Exported', `Created sync package ${syncResult.filename}`, 'SYNC');
+    return syncResult;
+  }, [data, currentUser, addActivityLog]);
+
+  const importUSBSyncPackage = useCallback((incomingJson: string): { success: boolean; diff?: SyncDiffResult; error?: string } => {
+    if (!currentUser) return { success: false, error: 'Please log in first.' };
+    try {
+      const parsed: SyncPackage = JSON.parse(incomingJson);
+      if (!parsed.syncId || !Array.isArray(parsed.invoices)) {
+        return { success: false, error: 'Invalid GST Sync Package format.' };
+      }
+
+      const diff = mergeSyncPackage(data, parsed, currentUser);
+      return { success: true, diff };
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Failed to parse sync bundle file.' };
+    }
+  }, [data, currentUser]);
+
+  const applyUSBSyncMerge = useCallback((diff: SyncDiffResult) => {
+    if (!currentUser) return;
+    setData(diff.mergedData);
+    OfflineStorage.saveData(diff.mergedData);
+
+    const log: SyncLog = {
+      id: `synclog-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      direction: 'IMPORT',
+      sourceDevice: 'External USB/Phone',
+      userId: currentUser.id,
+      userName: currentUser.name,
+      invoicesCount: diff.newInvoices.length + diff.updatedInvoices.length,
+      paymentsCount: diff.newPayments.length,
+      customersCount: diff.newCustomers.length + diff.updatedCustomers.length,
+      itemsCount: diff.newItems.length,
+      status: 'SUCCESS',
+      details: diff.summary,
+    };
+
+    setData(prev => ({
+      ...prev,
+      syncLogs: [log, ...(prev.syncLogs || []).slice(0, 49)],
+    }));
+
+    addActivityLog('USB Sync Merged', diff.summary, 'SYNC');
+    showToast('success', 'USB Sync Complete', diff.summary);
+  }, [currentUser, addActivityLog, showToast]);
+
   const lockApp = useCallback(() => {
     if (data.company.isPasswordProtected && data.company.passwordHash) {
       setIsLocked(true);
@@ -147,14 +421,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsLocked(false);
       return true;
     }
-    // Simple verification (in native Electron, bcrypt or argon2)
-    if (password === data.company.passwordHash || btoa(password) === data.company.passwordHash) {
+    if (password === data.company.passwordHash || btoa(password) === data.company.passwordHash || (currentUser && password === currentUser.passwordHash)) {
       setIsLocked(false);
       showToast('success', 'Unlocked', 'Welcome back to GST Invoice Pro');
       return true;
     }
     return false;
-  }, [data.company, showToast]);
+  }, [data.company, currentUser, showToast]);
+
 
   const updateCompany = useCallback((updated: Partial<CompanyProfile>) => {
     setData(prev => ({
@@ -894,9 +1168,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       value={{
         currentView,
         setCurrentView,
+        currentUser,
+        users: data.users || DEFAULT_USERS,
+        login,
+        logout,
+        switchUser,
+        saveUser,
+        deleteUser,
+        updateUserPermissions,
+        hasPermission,
         isLocked,
         lockApp,
         unlockApp,
+        syncLogs: data.syncLogs || [],
+        activityLogs: data.activityLogs || [],
+        addActivityLog,
+        exportUSBSyncPackage,
+        importUSBSyncPackage,
+        applyUSBSyncMerge,
         company: data.company,
         customers: data.customers,
         items: data.items,

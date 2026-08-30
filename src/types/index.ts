@@ -199,6 +199,12 @@ export interface Invoice {
   poNumber?: string;
   poDate?: string;
   
+  // User & Salesman Attribution
+  createdByUserId?: string;
+  createdByUserName?: string;
+  salesmanId?: string;
+  salesmanName?: string;
+
   notes?: string;
   terms?: string;
   createdAt: string;
@@ -318,6 +324,85 @@ export interface AgeingBucket {
   invoicesCount: number;
 }
 
+export type UserRole = 'ADMIN' | 'SALESMAN' | 'STAFF' | 'ACCOUNTANT' | 'CUSTOM';
+
+export interface UserPermissions {
+  canCreateInvoice: boolean;
+  canCreateEstimate: boolean;
+  canEditInvoice: boolean;
+  canDeleteInvoice: boolean;
+  canCancelInvoice: boolean;
+  canViewProfit: boolean;
+  canManageItems: boolean;
+  canManageCustomers: boolean;
+  canRecordPayment: boolean;
+  canCreateCreditNote: boolean;
+  canViewReports: boolean;
+  canSyncUSB: boolean;
+  canBackupRestore: boolean;
+  canManageCompanySettings: boolean;
+  canManageUsers: boolean;
+  allowDiscountEditing?: boolean;
+  maxDiscountPercent?: number;
+  salesCommissionPercent?: number;
+}
+
+export interface AppUser {
+  id: string;
+  username: string; // login id (unique)
+  name: string;
+  passwordHash: string; // password
+  role: UserRole;
+  phone?: string;
+  email?: string;
+  isActive: boolean;
+  permissions: UserPermissions;
+  lastLoginAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SyncPackage {
+  syncId: string;
+  version: string;
+  deviceId: string;
+  deviceName: string;
+  exportedAt: string;
+  exportedByUserId: string;
+  exportedByUserName: string;
+  invoices: Invoice[];
+  payments: Payment[];
+  customers: Customer[];
+  items: Item[];
+  creditNotes: CreditNote[];
+  checksum: string;
+}
+
+export interface SyncLog {
+  id: string;
+  timestamp: string;
+  direction: 'EXPORT' | 'IMPORT';
+  sourceDevice: string;
+  userId: string;
+  userName: string;
+  invoicesCount: number;
+  paymentsCount: number;
+  customersCount: number;
+  itemsCount: number;
+  status: 'SUCCESS' | 'CONFLICT_RESOLVED' | 'FAILED';
+  details: string;
+}
+
+export interface ActivityLog {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userName: string;
+  action: string;
+  details: string;
+  type: 'AUTH' | 'INVOICE' | 'PAYMENT' | 'CUSTOMER' | 'ITEM' | 'SYNC' | 'ADMIN';
+}
+
 export interface BackupData {
   version: string;
   exportedAt: string;
@@ -327,4 +412,8 @@ export interface BackupData {
   invoices: Invoice[];
   payments: Payment[];
   creditNotes: CreditNote[];
+  users?: AppUser[];
+  syncLogs?: SyncLog[];
+  activityLogs?: ActivityLog[];
 }
+
