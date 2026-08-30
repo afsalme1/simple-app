@@ -1,0 +1,43 @@
+{
+  "short_name": "GST Invoice Pro",
+  "name": "GST Invoice Pro - Indian Billing & Invoicing Suite",
+  "description": "Offline GST Invoicing, Estimates, Ledgers, Tax Reports & Inventory for Indian Businesses",
+  "id": "com.beemastore.gstinvoicepro",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f766e",
+  "theme_color": "#0f766e",
+  "categories": ["business", "finance", "productivity"],
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New Tax Invoice",
+      "short_name": "New Invoice",
+      "description": "Create a new GST Tax Invoice",
+      "url": "/#new-invoice",
+      "icons": [{ "src": "/app-icon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Items Catalog",
+      "short_name": "Items",
+      "description": "View and manage stock items",
+      "url": "/#items",
+      "icons": [{ "src": "/app-icon.svg", "sizes": "192x192" }]
+    }
+  ]
+}

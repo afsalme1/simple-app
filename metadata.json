@@ -1,0 +1,6 @@
+{
+  "name": "GST Invoice Pro - Offline Indian GST Billing Suite",
+  "description": "Fully offline GST billing desktop application for India with gapless FY numbering, CGST/SGST/IGST tax engine, Bill of Supply, Estimate/Quotation billing, profit & margin analytics, invoice editing, A4 & thermal POS printing, GSTR-1 & 3B exports, customer ledgers, and SQLite backups. Created by BEEMA STORE.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

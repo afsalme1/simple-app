@@ -1,0 +1,10 @@
+{
+	"appId": "com.beemastore.gstinvoicepro",
+	"appName": "GST Invoice Pro",
+	"webDir": "dist",
+	"bundledWebRuntime": false,
+	"server": {
+		"androidScheme": "https"
+	},
+	"android": {}
+}
