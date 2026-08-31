@@ -12,6 +12,12 @@ import { ShortcutsModal } from './components/common/ShortcutsModal';
 import { WindowsAppModal } from './components/common/WindowsAppModal';
 import { AndroidAppModal } from './components/common/AndroidAppModal';
 import { ToastContainer } from './components/common/ToastContainer';
+import { LoginScreen } from './components/auth/LoginScreen';
+import { AdminUsersView } from './components/admin/AdminUsersView';
+import { SalesmanPortal } from './components/users/SalesmanPortal';
+import { StaffPortal } from './components/users/StaffPortal';
+import { AccountantPortal } from './components/users/AccountantPortal';
+import { USBSyncView } from './components/sync/USBSyncView';
 import { Dashboard } from './components/dashboard/Dashboard';
 import { InvoiceEditor } from './components/invoicing/InvoiceEditor';
 import { InvoiceList } from './components/invoicing/InvoiceList';
@@ -27,7 +33,7 @@ import { BackupManager } from './components/backup/BackupManager';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 const AppContent: React.FC = () => {
-  const { currentView } = useApp();
+  const { currentView, currentUser } = useApp();
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
   const [isWindowsModalOpen, setIsWindowsModalOpen] = useState(false);
   const [isAndroidModalOpen, setIsAndroidModalOpen] = useState(false);
@@ -64,8 +70,28 @@ const AppContent: React.FC = () => {
     },
   });
 
+  // If no user is logged in, show authentication login screen
+  if (!currentUser) {
+    return (
+      <div className="h-screen w-screen overflow-hidden bg-slate-950 font-sans text-slate-100">
+        <LoginScreen />
+        <ToastContainer />
+      </div>
+    );
+  }
+
   const renderView = () => {
     switch (currentView) {
+      case 'admin-users':
+        return <AdminUsersView />;
+      case 'salesman-portal':
+        return <SalesmanPortal />;
+      case 'staff-portal':
+        return <StaffPortal />;
+      case 'accountant-portal':
+        return <AccountantPortal />;
+      case 'usb-sync':
+        return <USBSyncView />;
       case 'dashboard':
         return <Dashboard />;
       case 'new-invoice':
@@ -110,7 +136,7 @@ const AppContent: React.FC = () => {
         />
 
         {/* Dynamic Main Body */}
-        <main className="flex-1 overflow-y-auto bg-slate-100 pb-20 md:pb-12">
+        <main className="flex-1 overflow-y-auto bg-slate-100 pb-20 md:pb-12 p-4 md:p-6">
           {renderView()}
         </main>
       </div>

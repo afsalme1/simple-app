@@ -343,6 +343,16 @@ export function calculateInvoiceProfit(items: InvoiceItem[]): { totalCost: numbe
 }
 
 /**
+ * Format number into Indian Currency (e.g. ₹1,23,456.00)
+ */
+export function formatCurrencyIndian(amount: number): string {
+  return '₹' + Number(amount || 0).toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+/**
  * Generate UPI Payment Link and Deep Link for dynamic QR Code
  * Format: upi://pay?pa=VPA&pn=NAME&am=AMOUNT&cu=INR&tn=NOTE
  */

@@ -15,7 +15,13 @@ import {
   Download,
   Keyboard,
   LayoutDashboard,
-  Smartphone
+  Smartphone,
+  Shield,
+  Briefcase,
+  Calculator,
+  HardDrive,
+  LogOut,
+  UserCheck
 } from 'lucide-react';
 import { useApp, AppView } from '../../context/AppContext';
 
@@ -25,34 +31,34 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ onOpenShortcuts, onOpenAndroidModal }) => {
-  const { currentView, setCurrentView, lockApp, company, invoices, exportDatabase } = useApp();
+  const { 
+    currentView, 
+    setCurrentView, 
+    lockApp, 
+    company, 
+    invoices, 
+    exportDatabase, 
+    currentUser, 
+    logout 
+  } = useApp();
 
   const unpaidCount = invoices.filter(i => (i.status === 'PARTIAL' || i.status === 'ISSUED') && i.balanceAmount > 0).length;
 
-  const menuItems: Array<{
-    id: AppView;
-    label: string;
-    icon: React.ComponentType<{ className?: string }>;
-    shortcut: string;
-    badge?: number | string;
-    badgeColor?: string;
-  }> = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, shortcut: 'Alt+1' },
-    { id: 'invoices', label: 'Tax Invoices', icon: FileText, shortcut: 'Alt+2', badge: unpaidCount > 0 ? `${unpaidCount} Due` : undefined, badgeColor: 'bg-amber-100 text-amber-800' },
-    { id: 'customers', label: 'Customers Master', icon: Users, shortcut: 'Alt+3' },
-    { id: 'items', label: 'Items & HSN Catalog', icon: Package, shortcut: 'Alt+4' },
-    { id: 'payments', label: 'Payments & Ledger', icon: CreditCard, shortcut: 'Alt+5' },
-    { id: 'credit-notes', label: 'Credit Notes (CDNR)', icon: RotateCcw, shortcut: 'Alt+C' },
-    { id: 'reports', label: 'GST Reports & GSTR-1/3B', icon: BarChart3, shortcut: 'Alt+6' },
-    { id: 'backup', label: 'Backup & Database', icon: Database, shortcut: 'Alt+7' },
-    { id: 'settings', label: 'Company Setup & FY', icon: Settings, shortcut: 'Alt+8' },
-  ];
+  const getRoleThemeColor = () => {
+    switch (currentUser?.role) {
+      case 'ADMIN': return 'text-blue-400 bg-blue-500/10 border-blue-500/30';
+      case 'SALESMAN': return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
+      case 'STAFF': return 'text-purple-400 bg-purple-500/10 border-purple-500/30';
+      case 'ACCOUNTANT': return 'text-amber-400 bg-amber-500/10 border-amber-500/30';
+      default: return 'text-teal-400 bg-teal-500/10 border-teal-500/30';
+    }
+  };
 
   return (
     <aside className="hidden md:flex w-64 bg-slate-900 text-slate-100 flex-col h-full shrink-0 border-r border-slate-800 select-none">
       {/* Brand Header */}
       <div className="p-4 border-b border-slate-800 flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-teal-600 flex items-center justify-center text-white font-bold shadow-md">
+        <div className="w-10 h-10 rounded-lg bg-teal-600 flex items-center justify-center text-white font-bold shadow-md flex-shrink-0">
           {company.logoUrl ? (
             <img src={company.logoUrl} alt="Logo" className="w-full h-full object-cover rounded-lg" />
           ) : (
@@ -70,8 +76,32 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenShortcuts, onOpenAndroid
         </div>
       </div>
 
+      {/* User Session Profile Card */}
+      {currentUser && (
+        <div className="p-3 mx-2 my-2 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-xs text-white flex-shrink-0">
+              {currentUser.name.charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-bold text-white truncate">{currentUser.name}</div>
+              <div className={`text-[10px] font-semibold px-1.5 py-0.2 rounded inline-block border ${getRoleThemeColor()}`}>
+                {currentUser.role}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={logout}
+            title="Sign Out"
+            className="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Quick Action Button */}
-      <div className="p-3">
+      <div className="px-3 pb-2">
         <button
           id="btn-sidebar-create-invoice"
           onClick={() => setCurrentView('new-invoice')}
@@ -90,72 +120,206 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenShortcuts, onOpenAndroid
 
       {/* Navigation Links */}
       <nav className="flex-1 px-2 py-1 space-y-1 overflow-y-auto">
-        <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+        {/* Role Portal Pages Section */}
+        <div className="px-3 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+          User Portals & Sync
+        </div>
+
+        {currentUser?.role === 'ADMIN' && (
+          <button
+            onClick={() => setCurrentView('admin-users')}
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer group ${
+              currentView === 'admin-users' ? 'bg-blue-600/30 text-blue-300 border border-blue-500/40' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <Shield className="w-4 h-4 text-blue-400" />
+              <span>Admin & Users</span>
+            </div>
+            <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded font-bold">Admin</span>
+          </button>
+        )}
+
+        {currentUser?.role === 'SALESMAN' && (
+          <button
+            onClick={() => setCurrentView('salesman-portal')}
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer group ${
+              currentView === 'salesman-portal' ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/40' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <Briefcase className="w-4 h-4 text-emerald-400" />
+              <span>Salesman Desk</span>
+            </div>
+            <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-bold">Field</span>
+          </button>
+        )}
+
+        {currentUser?.role === 'STAFF' && (
+          <button
+            onClick={() => setCurrentView('staff-portal')}
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer group ${
+              currentView === 'staff-portal' ? 'bg-purple-600/30 text-purple-300 border border-purple-500/40' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <FileText className="w-4 h-4 text-purple-400" />
+              <span>Staff Billing Desk</span>
+            </div>
+            <span className="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded font-bold">POS</span>
+          </button>
+        )}
+
+        {currentUser?.role === 'ACCOUNTANT' && (
+          <button
+            onClick={() => setCurrentView('accountant-portal')}
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer group ${
+              currentView === 'accountant-portal' ? 'bg-amber-600/30 text-amber-300 border border-amber-500/40' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <Calculator className="w-4 h-4 text-amber-400" />
+              <span>Accountant Desk</span>
+            </div>
+            <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-bold">Audit</span>
+          </button>
+        )}
+
+        {/* USB Sync for everyone */}
+        <button
+          onClick={() => setCurrentView('usb-sync')}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer group ${
+            currentView === 'usb-sync' ? 'bg-teal-700/80 text-white shadow-sm' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <HardDrive className="w-4 h-4 text-teal-300" />
+            <span>USB Sync (PC & Phone)</span>
+          </div>
+          <span className="text-[10px] bg-teal-500/20 text-teal-300 px-1.5 py-0.5 rounded font-bold">USB</span>
+        </button>
+
+        {/* Core Billing Items */}
+        <div className="pt-2 px-3 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
           Billing & Operations
         </div>
-        {menuItems.slice(0, 6).map(item => {
-          const Icon = item.icon;
-          const isActive = currentView === item.id || (item.id === 'invoices' && currentView === 'new-invoice');
-          return (
-            <button
-              key={item.id}
-              id={`nav-${item.id}`}
-              onClick={() => setCurrentView(item.id)}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer group ${
-                isActive
-                  ? 'bg-teal-700/80 text-white shadow-sm'
-                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Icon className={`w-4 h-4 ${isActive ? 'text-teal-200' : 'text-slate-400'}`} />
-                <span>{item.label}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                {item.badge && (
-                  <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${item.badgeColor || 'bg-slate-700 text-slate-200'}`}>
-                    {item.badge}
-                  </span>
-                )}
-                <kbd className={`text-[10px] font-mono opacity-40 group-hover:opacity-100 px-1 py-0.5 rounded ${
-                  isActive ? 'bg-teal-800 text-teal-100' : 'bg-slate-800 text-slate-400'
-                }`}>
-                  {item.shortcut}
-                </kbd>
-              </div>
-            </button>
-          );
-        })}
 
-        <div className="pt-3 px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+        <button
+          onClick={() => setCurrentView('dashboard')}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+            currentView === 'dashboard' ? 'bg-teal-700/80 text-white' : 'text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <LayoutDashboard className="w-4 h-4 text-slate-400" />
+            <span>Dashboard</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setCurrentView('invoices')}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+            currentView === 'invoices' || currentView === 'new-invoice' ? 'bg-teal-700/80 text-white' : 'text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <FileText className="w-4 h-4 text-slate-400" />
+            <span>Tax Invoices</span>
+          </div>
+          {unpaidCount > 0 && (
+            <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-amber-100 text-amber-800">
+              {unpaidCount} Due
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setCurrentView('customers')}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+            currentView === 'customers' ? 'bg-teal-700/80 text-white' : 'text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <Users className="w-4 h-4 text-slate-400" />
+            <span>Customers Master</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setCurrentView('items')}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+            currentView === 'items' ? 'bg-teal-700/80 text-white' : 'text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <Package className="w-4 h-4 text-slate-400" />
+            <span>Items & HSN Catalog</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setCurrentView('payments')}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+            currentView === 'payments' ? 'bg-teal-700/80 text-white' : 'text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <CreditCard className="w-4 h-4 text-slate-400" />
+            <span>Payments & Ledger</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setCurrentView('credit-notes')}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+            currentView === 'credit-notes' ? 'bg-teal-700/80 text-white' : 'text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <RotateCcw className="w-4 h-4 text-slate-400" />
+            <span>Credit Notes (CDNR)</span>
+          </div>
+        </button>
+
+        <div className="pt-3 px-3 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
           Compliance & System
         </div>
-        {menuItems.slice(6).map(item => {
-          const Icon = item.icon;
-          const isActive = currentView === item.id;
-          return (
-            <button
-              key={item.id}
-              id={`nav-${item.id}`}
-              onClick={() => setCurrentView(item.id)}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer group ${
-                isActive
-                  ? 'bg-teal-700/80 text-white shadow-sm'
-                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Icon className={`w-4 h-4 ${isActive ? 'text-teal-200' : 'text-slate-400'}`} />
-                <span>{item.label}</span>
-              </div>
-              <kbd className={`text-[10px] font-mono opacity-40 group-hover:opacity-100 px-1 py-0.5 rounded ${
-                isActive ? 'bg-teal-800 text-teal-100' : 'bg-slate-800 text-slate-400'
-              }`}>
-                {item.shortcut}
-              </kbd>
-            </button>
-          );
-        })}
+
+        <button
+          onClick={() => setCurrentView('reports')}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+            currentView === 'reports' ? 'bg-teal-700/80 text-white' : 'text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <BarChart3 className="w-4 h-4 text-slate-400" />
+            <span>GST Reports & GSTR-1</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setCurrentView('backup')}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+            currentView === 'backup' ? 'bg-teal-700/80 text-white' : 'text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <Database className="w-4 h-4 text-slate-400" />
+            <span>Backup & Database</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setCurrentView('settings')}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+            currentView === 'settings' ? 'bg-teal-700/80 text-white' : 'text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <Settings className="w-4 h-4 text-slate-400" />
+            <span>Company Setup</span>
+          </div>
+        </button>
       </nav>
 
       {/* Footer Info & Quick Utilities */}
@@ -233,4 +397,5 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenShortcuts, onOpenAndroid
     </aside>
   );
 };
+
 
